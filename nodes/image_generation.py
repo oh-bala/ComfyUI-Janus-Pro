@@ -56,7 +56,13 @@ class JanusImageGeneration:
 
         # 设置随机种子
         torch.manual_seed(seed)
-        torch.cuda.manual_seed(seed)
+        if torch.cuda.is_available():
+            device = torch.device("cuda")
+            torch.cuda.manual_seed(seed)
+        elif torch.backends.mps.is_available():
+            device = torch.device("mps")
+        else:
+            device = torch.device("cpu")
 
         # 图像参数设置
         image_token_num = 576  # 24x24 patches
@@ -83,10 +89,10 @@ class JanusImageGeneration:
 
         # 编码输入文本
         input_ids = processor.tokenizer.encode(prompt)
-        input_ids = torch.LongTensor(input_ids)
+        input_ids = torch.LongTensor(input_ids).to(device)
 
         # 准备条件和无条件输入
-        tokens = torch.zeros((parallel_size*2, len(input_ids)), dtype=torch.int).cuda()
+        tokens = torch.zeros((parallel_size*2, len(input_ids)), dtype=torch.int).to(device)
         for i in range(parallel_size*2):
             tokens[i, :] = input_ids
             if i % 2 != 0:  # 无条件输入
@@ -96,7 +102,7 @@ class JanusImageGeneration:
         inputs_embeds = model.language_model.get_input_embeddings()(tokens)
 
         # 生成图像tokens
-        generated_tokens = torch.zeros((parallel_size, image_token_num), dtype=torch.int).cuda()
+        generated_tokens = torch.zeros((parallel_size, image_token_num), dtype=torch.int).to(device)
         outputs = None
 
         # 自回归生成
